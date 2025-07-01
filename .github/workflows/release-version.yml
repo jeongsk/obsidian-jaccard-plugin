@@ -1,0 +1,97 @@
+name: Update Version and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New version (e.g., 1.0.1)'
+        required: true
+        type: string
+
+jobs:
+  update-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Update version in manifest.json
+        run: |
+          jq '.version = "${{ github.event.inputs.version }}"' manifest.json > manifest.tmp.json
+          mv manifest.tmp.json manifest.json
+
+      - name: Update version in package.json
+        run: |
+          # Force update the version in package.json
+          jq '.version = "${{ github.event.inputs.version }}"' package.json > package.tmp.json
+          mv package.tmp.json package.json
+
+      - name: Update versions.json
+        run: |
+          jq '. + {"${{ github.event.inputs.version }}": "1.8.0"}' versions.json > versions.tmp.json
+          mv versions.tmp.json versions.json
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add manifest.json package.json versions.json
+          git commit -m "Update version to ${{ github.event.inputs.version }}"
+          git push
+
+      - name: Create and push tag
+        run: |
+          git tag ${{ github.event.inputs.version }}
+          git push origin ${{ github.event.inputs.version }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Check required files
+        run: |
+          test -f main.js || (echo "main.js not found" && exit 1)
+          test -f manifest.json || (echo "manifest.json not found" && exit 1)
+          test -f styles.css || (echo "styles.css not found" && exit 1)
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: Release ${{ github.event.inputs.version }}
+          body: |
+            # Release Notes for ${{ github.event.inputs.version }}
+            
+            ## What's New
+            - See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details
+            
+            ## Installation
+            
+            ### Method 1: Manual Installation
+            - Download the attached files (`main.js`, `manifest.json`, `styles.css`)
+            - Create a folder named `obsidian-jaccard-plugin` in your vault's `.obsidian/plugins/` directory
+            - Copy the downloaded files to this folder
+            - Enable the plugin in Obsidian settings
+            
+            ### Method 2: Using BRAT (Beta Reviewers Auto-update Tool)
+            1. Install BRAT plugin from Community plugins
+            2. Open Command Palette and run `BRAT: Add a beta plugin for testing`
+            3. Enter this repository URL: `https://github.com/jeongsk/obsidian-jaccard-plugin`
+            4. Click "Add Plugin" and wait for installation
+            5. Go to Settings → Community plugins and enable "Jaccard Plugin"
+          draft: false
+          prerelease: false
+          files: |
+            main.js
+            manifest.json
+            styles.css
+            versions.json
