@@ -78,15 +78,22 @@ export class SimilarNotesView extends ItemView {
 			
 			// Title with truncation
 			const titleEl = mainRow.createEl('div', { cls: 'jaccard-similar-note-title' });
-			const linkEl = titleEl.createEl('a', { 
+			titleEl.createEl('a', { 
 				text: note.file.basename,
 				cls: 'internal-link',
-				title: note.file.basename // Show full name on hover
+				title: note.file.basename, // Show full name on hover
+				href: '#'
 			});
 			
-			linkEl.addEventListener('click', (event) => {
+			// Add click handler to the entire note item for better UX
+			noteEl.addEventListener('click', async (event) => {
 				event.preventDefault();
-				this.app.workspace.getLeaf().openFile(note.file);
+				event.stopPropagation();
+				// Use the main workspace leaf to open the file
+				const leaf = this.app.workspace.getMostRecentLeaf();
+				if (leaf) {
+					await leaf.openFile(note.file);
+				}
 			});
 
 			// Details on separate row
