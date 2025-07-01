@@ -1,85 +1,82 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { Plugin, WorkspaceLeaf, TFile, Notice } from 'obsidian';
+import { JaccardSettings, JaccardSettingTab, DEFAULT_SETTINGS } from './src/settings';
+import { IndexingService } from './src/indexing';
+import { SimilarityCalculator } from './src/similarity';
+import { SimilarNotesView, VIEW_TYPE_SIMILAR_NOTES } from './src/view';
 
-// Remember to rename these classes and interfaces!
-
-interface MyPluginSettings {
-	mySetting: string;
-}
-
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class JaccardPlugin extends Plugin {
+	settings!: JaccardSettings;
+	indexingService!: IndexingService;
+	similarityCalculator!: SimilarityCalculator;
 
 	async onload() {
 		await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
+		this.indexingService = new IndexingService(this.app.vault, this.app.metadataCache);
+		this.similarityCalculator = new SimilarityCalculator(this.settings);
+
+		this.registerView(
+			VIEW_TYPE_SIMILAR_NOTES,
+			(leaf) => new SimilarNotesView(leaf, this)
+		);
+
+		this.addRibbonIcon('dice', 'Similar Notes', () => {
+			this.activateView();
 		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
-
-		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
+			id: 'reindex',
+			name: 'Reindex all notes',
+			callback: async () => {
+				new Notice('Reindexing all notes...');
+				await this.indexingService.reindexAll();
+				new Notice('Reindexing complete!');
+				await this.updateSimilarNotes();
+			}
+		});
+
+		this.addCommand({
+			id: 'show-similar-notes',
+			name: 'Show similar notes',
 			callback: () => {
-				new SampleModal(this.app).open();
+				this.activateView();
 			}
 		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
+		this.addSettingTab(new JaccardSettingTab(this.app, this));
+
+		this.app.workspace.onLayoutReady(async () => {
+			await this.indexingService.reindexAll();
+			this.activateView();
+		});
+
+		this.registerEvent(
+			this.app.vault.on('modify', async (file) => {
+				if (file instanceof TFile && file.extension === 'md') {
+					await this.indexingService.updateIndex(file);
+					await this.updateSimilarNotes();
 				}
-			}
-		});
+			})
+		);
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		this.registerEvent(
+			this.app.vault.on('delete', async (file) => {
+				if (file instanceof TFile && file.extension === 'md') {
+					this.indexingService.removeFromIndex(file);
+					await this.updateSimilarNotes();
+				}
+			})
+		);
 
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		this.registerEvent(
+			this.app.workspace.on('active-leaf-change', async () => {
+				await this.updateSimilarNotes();
+			})
+		);
 	}
 
 	onunload() {
-
+		this.app.workspace.detachLeavesOfType(VIEW_TYPE_SIMILAR_NOTES);
 	}
 
 	async loadSettings() {
@@ -88,47 +85,63 @@ export default class MyPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
+		this.similarityCalculator.updateWeights(this.settings);
+		await this.updateSimilarNotes();
 	}
 
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
+	async activateView() {
+		const { workspace } = this.app;
+
+		let leaf: WorkspaceLeaf | null = null;
+		const leaves = workspace.getLeavesOfType(VIEW_TYPE_SIMILAR_NOTES);
+
+		if (leaves.length > 0) {
+			leaf = leaves[0];
+		} else {
+			leaf = workspace.getRightLeaf(false);
+			if (leaf) {
+				await leaf.setViewState({ type: VIEW_TYPE_SIMILAR_NOTES, active: true });
+			}
+		}
+
+		if (leaf) {
+			workspace.revealLeaf(leaf);
+		}
 	}
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
+	async updateSimilarNotes() {
+		const activeFile = this.app.workspace.getActiveFile();
+		if (!activeFile || activeFile.extension !== 'md') {
+			return;
+		}
+
+		const similarNotes = await this.getSimilarNotes(activeFile);
+		const view = this.app.workspace.getLeavesOfType(VIEW_TYPE_SIMILAR_NOTES)[0]?.view;
+		
+		if (view instanceof SimilarNotesView) {
+			view.updateSimilarNotes(similarNotes, activeFile);
+		}
 	}
-}
 
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	async getSimilarNotes(file: TFile): Promise<Array<{ file: TFile; similarity: number; commonTags: number; commonLinks: number }>> {
+		const allFiles = this.app.vault.getMarkdownFiles();
+		const results: Array<{ file: TFile; similarity: number; commonTags: number; commonLinks: number }> = [];
 
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
+		for (const compareFile of allFiles) {
+			if (compareFile.path === file.path) continue;
 
-	display(): void {
-		const {containerEl} = this;
+			const result = await this.similarityCalculator.calculateSimilarity(
+				file,
+				compareFile,
+				this.indexingService
+			);
 
-		containerEl.empty();
+			if (result.similarity >= this.settings.minSimilarityThreshold) {
+				results.push(result);
+			}
+		}
 
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
+		results.sort((a, b) => b.similarity - a.similarity);
+		return results.slice(0, this.settings.maxDisplayNotes);
 	}
 }
