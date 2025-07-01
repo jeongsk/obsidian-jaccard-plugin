@@ -43,13 +43,13 @@ export class SimilarNotesView extends ItemView {
 		const container = this.containerEl.children[1];
 		container.empty();
 
-		const headerEl = container.createEl('div', { cls: 'similar-notes-header' });
+		const headerEl = container.createEl('div', { cls: 'jaccard-similar-notes-header' });
 		headerEl.createEl('h4', { text: `Similar Notes (${this.similarNotes.length})` });
 
 		if (!this.currentFile) {
 			container.createEl('div', { 
 				text: 'Open a note to see similar notes',
-				cls: 'similar-notes-empty'
+				cls: 'jaccard-similar-notes-empty'
 			});
 			return;
 		}
@@ -57,17 +57,17 @@ export class SimilarNotesView extends ItemView {
 		if (this.similarNotes.length === 0) {
 			container.createEl('div', { 
 				text: 'No similar notes found',
-				cls: 'similar-notes-empty'
+				cls: 'jaccard-similar-notes-empty'
 			});
 			return;
 		}
 
-		const listEl = container.createEl('div', { cls: 'similar-notes-list' });
+		const listEl = container.createEl('div', { cls: 'jaccard-similar-notes-list' });
 
 		for (const note of this.similarNotes) {
-			const noteEl = listEl.createEl('div', { cls: 'similar-note-item' });
+			const noteEl = listEl.createEl('div', { cls: 'jaccard-similar-note-item' });
 			
-			const titleEl = noteEl.createEl('div', { cls: 'similar-note-title' });
+			const titleEl = noteEl.createEl('div', { cls: 'jaccard-similar-note-title' });
 			const linkEl = titleEl.createEl('a', { 
 				text: note.file.basename,
 				cls: 'internal-link'
@@ -78,102 +78,26 @@ export class SimilarNotesView extends ItemView {
 				this.app.workspace.getLeaf().openFile(note.file);
 			});
 
-			const scoreEl = noteEl.createEl('div', { cls: 'similar-note-score' });
+			const scoreEl = noteEl.createEl('div', { cls: 'jaccard-similar-note-score' });
 			scoreEl.createEl('span', { 
 				text: `${Math.round(note.similarity * 100)}%`,
-				cls: 'similarity-percentage'
+				cls: 'jaccard-similarity-percentage'
 			});
 
-			const detailsEl = noteEl.createEl('div', { cls: 'similar-note-details' });
+			const detailsEl = noteEl.createEl('div', { cls: 'jaccard-similar-note-details' });
 			if (note.commonTags > 0) {
 				detailsEl.createEl('span', { 
 					text: `${note.commonTags} common tags`,
-					cls: 'common-detail'
+					cls: 'jaccard-common-detail'
 				});
 			}
 			if (note.commonLinks > 0) {
 				detailsEl.createEl('span', { 
 					text: `${note.commonLinks} common links`,
-					cls: 'common-detail'
+					cls: 'jaccard-common-detail'
 				});
 			}
 		}
-
-		this.addStyles();
 	}
 
-	private addStyles() {
-		const styleEl = document.getElementById('jaccard-plugin-styles');
-		if (styleEl) return;
-
-		const style = document.createElement('style');
-		style.id = 'jaccard-plugin-styles';
-		style.textContent = `
-			.similar-notes-header {
-				padding: 10px;
-				border-bottom: 1px solid var(--background-modifier-border);
-			}
-
-			.similar-notes-header h4 {
-				margin: 0;
-				font-size: 14px;
-				font-weight: 600;
-			}
-
-			.similar-notes-empty {
-				padding: 20px;
-				text-align: center;
-				color: var(--text-muted);
-			}
-
-			.similar-notes-list {
-				padding: 10px;
-			}
-
-			.similar-note-item {
-				padding: 10px;
-				border-radius: 4px;
-				margin-bottom: 8px;
-				background-color: var(--background-secondary);
-				cursor: pointer;
-				transition: background-color 0.2s;
-			}
-
-			.similar-note-item:hover {
-				background-color: var(--background-secondary-alt);
-			}
-
-			.similar-note-title {
-				font-weight: 500;
-				margin-bottom: 4px;
-			}
-
-			.similar-note-title .internal-link {
-				text-decoration: none;
-				color: var(--text-normal);
-			}
-
-			.similar-note-score {
-				display: flex;
-				align-items: center;
-				margin-bottom: 4px;
-			}
-
-			.similarity-percentage {
-				font-size: 14px;
-				font-weight: 600;
-				color: var(--text-accent);
-			}
-
-			.similar-note-details {
-				font-size: 12px;
-				color: var(--text-muted);
-			}
-
-			.common-detail {
-				margin-right: 10px;
-			}
-		`;
-		document.head.appendChild(style);
-	}
 }
