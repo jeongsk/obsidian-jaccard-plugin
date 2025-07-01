@@ -67,10 +67,21 @@ export class SimilarNotesView extends ItemView {
 		for (const note of this.similarNotes) {
 			const noteEl = listEl.createEl('div', { cls: 'jaccard-similar-note-item' });
 			
-			const titleEl = noteEl.createEl('div', { cls: 'jaccard-similar-note-title' });
+			const mainRow = noteEl.createEl('div', { cls: 'jaccard-similar-note-main-row' });
+			
+			// Similarity score at the front
+			const scoreEl = mainRow.createEl('div', { cls: 'jaccard-similar-note-score' });
+			scoreEl.createEl('span', { 
+				text: `${Math.round(note.similarity * 100)}%`,
+				cls: 'jaccard-similarity-percentage'
+			});
+			
+			// Title with truncation
+			const titleEl = mainRow.createEl('div', { cls: 'jaccard-similar-note-title' });
 			const linkEl = titleEl.createEl('a', { 
 				text: note.file.basename,
-				cls: 'internal-link'
+				cls: 'internal-link',
+				title: note.file.basename // Show full name on hover
 			});
 			
 			linkEl.addEventListener('click', (event) => {
@@ -78,12 +89,7 @@ export class SimilarNotesView extends ItemView {
 				this.app.workspace.getLeaf().openFile(note.file);
 			});
 
-			const scoreEl = noteEl.createEl('div', { cls: 'jaccard-similar-note-score' });
-			scoreEl.createEl('span', { 
-				text: `${Math.round(note.similarity * 100)}%`,
-				cls: 'jaccard-similarity-percentage'
-			});
-
+			// Details on separate row
 			const detailsEl = noteEl.createEl('div', { cls: 'jaccard-similar-note-details' });
 			if (note.commonTags > 0) {
 				detailsEl.createEl('span', { 

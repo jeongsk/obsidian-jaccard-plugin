@@ -34,26 +34,36 @@
 	background-color: var(--background-secondary-alt);
 }
 
-.jaccard-similar-note-title {
-	font-weight: 500;
+.jaccard-similar-note-main-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
 	margin-bottom: 4px;
-}
-
-.jaccard-similar-note-title .internal-link {
-	text-decoration: none;
-	color: var(--text-normal);
 }
 
 .jaccard-similar-note-score {
-	display: flex;
-	align-items: center;
-	margin-bottom: 4px;
+	flex-shrink: 0;
 }
 
 .jaccard-similarity-percentage {
 	font-size: 14px;
 	font-weight: 600;
 	color: var(--text-accent);
+}
+
+.jaccard-similar-note-title {
+	flex: 1;
+	min-width: 0;
+	font-weight: 500;
+}
+
+.jaccard-similar-note-title .internal-link {
+	text-decoration: none;
+	color: var(--text-normal);
+	display: block;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .jaccard-similar-note-details {
