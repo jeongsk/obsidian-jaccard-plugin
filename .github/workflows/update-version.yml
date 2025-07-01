@@ -1,0 +1,52 @@
+name: Update Plugin Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New version (e.g., 1.0.1)'
+        required: true
+        type: string
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Update version in manifest.json
+        run: |
+          jq '.version = "${{ github.event.inputs.version }}"' manifest.json > manifest.tmp.json
+          mv manifest.tmp.json manifest.json
+
+      - name: Update version in package.json
+        run: |
+          # Force update the version in package.json
+          jq '.version = "${{ github.event.inputs.version }}"' package.json > package.tmp.json
+          mv package.tmp.json package.json
+
+      - name: Update versions.json
+        run: |
+          jq '. + {"${{ github.event.inputs.version }}": "1.8.0"}' versions.json > versions.tmp.json
+          mv versions.tmp.json versions.json
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add manifest.json package.json versions.json
+          git commit -m "Update version to ${{ github.event.inputs.version }}"
+          git push
+
+      - name: Create and push tag
+        run: |
+          git tag ${{ github.event.inputs.version }}
+          git push origin ${{ github.event.inputs.version }}

@@ -38,20 +38,27 @@ The plugin uses the Jaccard similarity index to compare notes:
 
 ## Installation
 
-### From Obsidian Community Plugins
+### From Obsidian Community Plugins (Coming Soon)
 1. Open Settings > Community plugins
 2. Search for "Jaccard Similar Notes"
 3. Install and enable the plugin
 
-### Manual Installation
-1. Download the latest release from GitHub
-2. Extract the files to your vault's `.obsidian/plugins/obsidian-jaccard-plugin/` folder
+### Method 1: Manual Installation
+1. Download the latest release from [GitHub Releases](https://github.com/jeongsk/obsidian-jaccard-plugin/releases)
+2. Extract the files (`main.js`, `manifest.json`, `styles.css`) to your vault's `.obsidian/plugins/obsidian-jaccard-plugin/` folder
 3. Reload Obsidian
 4. Enable the plugin in Settings > Community plugins
 
+### Method 2: Using BRAT (Beta Reviewers Auto-update Tool)
+1. Install the BRAT plugin from Community plugins
+2. Open Command Palette (Cmd/Ctrl + P) and run `BRAT: Add a beta plugin for testing`
+3. Enter this repository URL: `https://github.com/jeongsk/obsidian-jaccard-plugin`
+4. Click "Add Plugin" and wait for installation
+5. Go to Settings → Community plugins and enable "Jaccard Plugin"
+
 ## Support
 
-If you encounter any issues or have feature requests, please file them on the [GitHub repository](https://github.com/yourusername/obsidian-jaccard-plugin).
+If you encounter any issues or have feature requests, please file them on the [GitHub repository](https://github.com/jeongsk/obsidian-jaccard-plugin).
 
 ## License
 
