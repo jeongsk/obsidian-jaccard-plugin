@@ -1,4 +1,5 @@
 import { Vault, TFile, MetadataCache } from 'obsidian';
+import { hasKorean, extractKoreanKeywords } from './korean';
 
 export interface NoteIndex {
 	path: string;
@@ -70,6 +71,13 @@ export class IndexingService {
 	}
 
 	private extractKeywords(content: string): string[] {
+		// Check if the content contains Korean text
+		if (hasKorean(content)) {
+			// Use Korean-specific keyword extraction
+			return extractKoreanKeywords(content);
+		}
+
+		// For non-Korean text, use the existing English extraction logic
 		const stopWords = new Set([
 			'the', 'is', 'at', 'which', 'on', 'and', 'a', 'an', 'as', 'are',
 			'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does',
