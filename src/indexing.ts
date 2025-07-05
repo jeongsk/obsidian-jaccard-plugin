@@ -72,14 +72,30 @@ export class IndexingService {
 	}
 
 	private extractKeywords(content: string): string[] {
-		// Check if the content contains Korean text
+		const allKeywords = new Map<string, number>();
+		
+		// Extract Korean keywords if Korean text exists
 		if (hasKorean(content)) {
-			// Use Korean-specific keyword extraction
-			return extractKoreanKeywords(content);
+			const koreanKeywords = extractKoreanKeywords(content, 20);
+			koreanKeywords.forEach(keyword => {
+				allKeywords.set(keyword, (allKeywords.get(keyword) || 0) + 1);
+			});
 		}
-
-		// For non-Korean text, use the English extraction logic
-		return extractEnglishKeywords(content);
+		
+		// Extract English keywords
+		const englishKeywords = extractEnglishKeywords(content, 20);
+		englishKeywords.forEach(keyword => {
+			// Skip if it's a Korean word (to avoid duplicates)
+			if (!hasKorean(keyword)) {
+				allKeywords.set(keyword, (allKeywords.get(keyword) || 0) + 1);
+			}
+		});
+		
+		// Sort by frequency and return top keywords
+		return Array.from(allKeywords.entries())
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 20)
+			.map(([word]) => word);
 	}
 }
  
