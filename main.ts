@@ -76,6 +76,9 @@ export default class JaccardPlugin extends Plugin {
 	}
 
 	onunload() {
+		// Stop indexing if it's in progress
+		this.indexingService.stopIndexing();
+		
 		this.app.workspace.detachLeavesOfType(VIEW_TYPE_SIMILAR_NOTES);
 	}
 
