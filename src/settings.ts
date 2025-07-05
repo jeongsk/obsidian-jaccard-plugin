@@ -99,7 +99,7 @@ export class JaccardSettingTab extends PluginSettingTab {
 			.addSlider(slider => {
 				const sliderComponent = slider as SliderComponent;
 				sliderComponent
-					.setLimits(0, 1, 0.05)
+					.setLimits(0, 1, 0.01)
 					.setValue(this.plugin.settings.minSimilarityThreshold)
 					.setDynamicTooltip()
 					.onChange(async (value) => {
