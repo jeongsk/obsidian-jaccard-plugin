@@ -72,7 +72,7 @@ export class SimilarNotesView extends ItemView {
 			// Similarity score at the front
 			const scoreEl = mainRow.createEl('div', { cls: 'jaccard-similar-note-score' });
 			scoreEl.createEl('span', { 
-				text: `${Math.round(note.similarity * 100)}%`,
+				text: note.similarity.toFixed(2),
 				cls: 'jaccard-similarity-percentage'
 			});
 			
