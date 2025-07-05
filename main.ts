@@ -8,12 +8,26 @@ export default class JaccardPlugin extends Plugin {
 	settings!: JaccardSettings;
 	indexingService!: IndexingService;
 	similarityCalculator!: SimilarityCalculator;
+	statusBarItem!: HTMLElement;
 
 	async onload() {
 		await this.loadSettings();
 
 		this.indexingService = new IndexingService(this.app.vault, this.app.metadataCache);
 		this.similarityCalculator = new SimilarityCalculator(this.settings);
+		
+		// Create status bar item
+		this.statusBarItem = this.addStatusBarItem();
+		
+		// Set progress callback
+		this.indexingService.setProgressCallback((progress, total) => {
+			if (total > 0) {
+				const percentage = Math.round((progress / total) * 100);
+				this.statusBarItem.setText(`Indexing: ${percentage}% (${progress}/${total})`);
+			} else {
+				this.statusBarItem.setText('');
+			}
+		});
 
 		this.registerView(
 			VIEW_TYPE_SIMILAR_NOTES,

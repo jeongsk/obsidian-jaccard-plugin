@@ -1,4 +1,4 @@
-import { Vault, TFile, MetadataCache } from 'obsidian';
+import { Vault, TFile, MetadataCache, Notice } from 'obsidian';
 import { hasKorean, extractKoreanKeywords } from './korean';
 import { extractEnglishKeywords } from './english';
 
@@ -16,10 +16,15 @@ export class IndexingService {
 	private index: Map<string, NoteIndex> = new Map();
 	private isIndexing = false;
 	private shouldStop = false;
+	private onProgressCallback?: (progress: number, total: number) => void;
 
 	constructor(vault: Vault, metadataCache: MetadataCache) {
 		this.vault = vault;
 		this.metadataCache = metadataCache;
+	}
+
+	setProgressCallback(callback: (progress: number, total: number) => void) {
+		this.onProgressCallback = callback;
 	}
 
 	async reindexAll(): Promise<void> {
@@ -58,6 +63,11 @@ export class IndexingService {
 				const progress = Math.min(i + BATCH_SIZE, files.length);
 				console.log(`Indexed ${progress}/${files.length} files (${Math.round(progress / files.length * 100)}%)`);
 				
+				// Call progress callback if set
+				if (this.onProgressCallback) {
+					this.onProgressCallback(progress, files.length);
+				}
+				
 				// Small delay to prevent UI freezing
 				if (i + BATCH_SIZE < files.length && !this.shouldStop) {
 					await new Promise(resolve => setTimeout(resolve, DELAY_MS));
@@ -66,9 +76,14 @@ export class IndexingService {
 			
 			if (!this.shouldStop) {
 				console.log('Indexing complete!');
+				new Notice('Indexing complete!');
 			}
 		} finally {
 			this.isIndexing = false;
+			// Clear progress
+			if (this.onProgressCallback) {
+				this.onProgressCallback(0, 0);
+			}
 		}
 	}
 
