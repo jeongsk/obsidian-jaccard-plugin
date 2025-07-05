@@ -94,9 +94,35 @@ export function hasKorean(text: string): boolean {
 }
 
 /**
+ * Simple Korean word extraction without morphological analysis
+ */
+function extractKoreanWordsSimple(text: string, limit = 20): string[] {
+	// Extract Korean words using regex
+	const koreanWords = text.match(/[\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uAC00-\uD7A3\uD7B0-\uD7FF]+/g) || [];
+	
+	const wordCount = new Map<string, number>();
+	for (const word of koreanWords) {
+		if (word.length > 1 && !KOREAN_STOPWORDS.has(word)) {
+			const lowercaseWord = word.toLowerCase();
+			wordCount.set(lowercaseWord, (wordCount.get(lowercaseWord) || 0) + 1);
+		}
+	}
+	
+	return Array.from(wordCount.entries())
+		.sort((a, b) => b[1] - a[1])
+		.slice(0, limit)
+		.map(([word]) => word);
+}
+
+/**
  * Extracts keywords from Korean text using morphological analysis
  */
 export function extractKoreanKeywords(text: string, limit = 20): string[] {
+	// For performance, use simple extraction for long texts
+	if (text.length > 2000) {
+		return extractKoreanWordsSimple(text, limit);
+	}
+	
 	try {
 		// Normalize the text first
 		const normalized = normalize(text);
@@ -124,20 +150,7 @@ export function extractKoreanKeywords(text: string, limit = 20): string[] {
 			.map(([word]) => word);
 	} catch (error) {
 		console.error('Error extracting Korean keywords:', error);
-		console.error('Error details:', {
-			message: error instanceof Error ? error.message : String(error),
-			stack: error instanceof Error ? error.stack : undefined,
-			text: text.substring(0, 100) + '...'
-		});
-		// Fallback to simple word extraction if tokenization fails
-		return text
-			.split(/\s+/)
-			.filter(word => {
-				const cleanWord = word.toLowerCase();
-				return cleanWord.length > 1 && 
-					!KOREAN_STOPWORDS.has(cleanWord) && 
-					hasKorean(cleanWord);
-			})
-			.slice(0, limit);
+		// Fallback to simple extraction
+		return extractKoreanWordsSimple(text, limit);
 	}
 }
