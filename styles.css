@@ -37,7 +37,7 @@
 .jaccard-similar-note-main-row {
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: 0.25rem;
 	margin-bottom: 4px;
 }
 
