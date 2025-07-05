@@ -124,6 +124,11 @@ export function extractKoreanKeywords(text: string, limit = 20): string[] {
 			.map(([word]) => word);
 	} catch (error) {
 		console.error('Error extracting Korean keywords:', error);
+		console.error('Error details:', {
+			message: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined,
+			text: text.substring(0, 100) + '...'
+		});
 		// Fallback to simple word extraction if tokenization fails
 		return text
 			.split(/\s+/)

@@ -1,5 +1,6 @@
 import { Vault, TFile, MetadataCache } from 'obsidian';
 import { hasKorean, extractKoreanKeywords } from './korean';
+import { extractEnglishKeywords } from './english';
 
 export interface NoteIndex {
 	path: string;
@@ -77,36 +78,8 @@ export class IndexingService {
 			return extractKoreanKeywords(content);
 		}
 
-		// For non-Korean text, use the existing English extraction logic
-		const stopWords = new Set([
-			'the', 'is', 'at', 'which', 'on', 'and', 'a', 'an', 'as', 'are',
-			'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does',
-			'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must',
-			'shall', 'to', 'of', 'in', 'for', 'with', 'by', 'from', 'about',
-			'into', 'through', 'during', 'before', 'after', 'above', 'below',
-			'up', 'down', 'out', 'off', 'over', 'under', 'again', 'further',
-			'then', 'once', 'that', 'this', 'these', 'those', 'i', 'you', 'he',
-			'she', 'it', 'we', 'they', 'them', 'their', 'what', 'which', 'who',
-			'when', 'where', 'why', 'how', 'all', 'both', 'each', 'few', 'more',
-			'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
-			'same', 'so', 'than', 'too', 'very', 'can', 'just', 'but'
-		]);
-
-		const words = content
-			.toLowerCase()
-			.replace(/[#[\]]/g, '')
-			.replace(/[^\w\s]/g, ' ')
-			.split(/\s+/)
-			.filter(word => word.length > 3 && !stopWords.has(word));
-
-		const wordCount = new Map<string, number>();
-		for (const word of words) {
-			wordCount.set(word, (wordCount.get(word) || 0) + 1);
-		}
-
-		return Array.from(wordCount.entries())
-			.sort((a, b) => b[1] - a[1])
-			.slice(0, 20)
-			.map(([word]) => word);
+		// For non-Korean text, use the English extraction logic
+		return extractEnglishKeywords(content);
 	}
 }
+ 
