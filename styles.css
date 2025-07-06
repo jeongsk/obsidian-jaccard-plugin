@@ -64,6 +64,12 @@
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	cursor: pointer;
+	transition: color 0.15s ease-out;
+}
+
+.jaccard-similar-note-title .internal-link:hover {
+	color: var(--text-accent);
 }
 
 .jaccard-similar-note-details {
