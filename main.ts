@@ -18,6 +18,12 @@ export default class JaccardPlugin extends Plugin {
 		this.indexingService = new IndexingService(this.app.vault, this.app.metadataCache, this);
 		this.similarityCalculator = new SimilarityCalculator(this.settings);
 		
+		// Register hover link source for preview functionality
+		this.registerHoverLinkSource('jaccard-plugin', {
+			display: 'Jaccard Plugin',
+			defaultMod: false,
+		});
+		
 		// Create status bar item
 		this.statusBarItem = this.addStatusBarItem();
 		
