@@ -9,11 +9,13 @@ export default class JaccardPlugin extends Plugin {
 	indexingService!: IndexingService;
 	similarityCalculator!: SimilarityCalculator;
 	statusBarItem!: HTMLElement;
+	private updateDebounceTimer?: NodeJS.Timeout;
+	private readonly UPDATE_DELAY = 300; // 300ms debounce
 
 	async onload() {
 		await this.loadSettings();
 
-		this.indexingService = new IndexingService(this.app.vault, this.app.metadataCache);
+		this.indexingService = new IndexingService(this.app.vault, this.app.metadataCache, this);
 		this.similarityCalculator = new SimilarityCalculator(this.settings);
 		
 		// Create status bar item
@@ -60,12 +62,21 @@ export default class JaccardPlugin extends Plugin {
 		this.addSettingTab(new JaccardSettingTab(this.app, this));
 
 		this.app.workspace.onLayoutReady(async () => {
-			await this.indexingService.reindexAll();
+			await this.indexingService.initializeIndex();
 			this.activateView();
 		});
 
 		this.registerEvent(
 			this.app.vault.on('modify', async (file) => {
+				if (file instanceof TFile && file.extension === 'md') {
+					await this.indexingService.updateIndex(file);
+					await this.updateSimilarNotes();
+				}
+			})
+		);
+
+		this.registerEvent(
+			this.app.vault.on('create', async (file) => {
 				if (file instanceof TFile && file.extension === 'md') {
 					await this.indexingService.updateIndex(file);
 					await this.updateSimilarNotes();
@@ -83,6 +94,18 @@ export default class JaccardPlugin extends Plugin {
 		);
 
 		this.registerEvent(
+			this.app.vault.on('rename', async (file, oldPath) => {
+				if (file instanceof TFile && file.extension === 'md') {
+					// Remove old index entry
+					this.indexingService.removeFromIndex(oldPath);
+					// Add new index entry
+					await this.indexingService.updateIndex(file);
+					await this.updateSimilarNotes();
+				}
+			})
+		);
+
+		this.registerEvent(
 			this.app.workspace.on('active-leaf-change', async () => {
 				await this.updateSimilarNotes();
 			})
@@ -92,6 +115,19 @@ export default class JaccardPlugin extends Plugin {
 	onunload() {
 		// Stop indexing if it's in progress
 		this.indexingService.stopIndexing();
+		
+		// Cancel any pending update timers
+		if (this.updateDebounceTimer) {
+			clearTimeout(this.updateDebounceTimer);
+		}
+		
+		// Cleanup indexing service
+		this.indexingService.cleanup();
+		
+		// Save index before unloading
+		this.indexingService.saveIndex().catch(error => {
+			console.error('Failed to save index on unload:', error);
+		});
 		
 		this.app.workspace.detachLeavesOfType(VIEW_TYPE_SIMILAR_NOTES);
 	}
@@ -127,25 +163,36 @@ export default class JaccardPlugin extends Plugin {
 	}
 
 	async updateSimilarNotes() {
-		const activeFile = this.app.workspace.getActiveFile();
-		if (!activeFile || activeFile.extension !== 'md') {
-			return;
+		// Cancel previous timer
+		if (this.updateDebounceTimer) {
+			clearTimeout(this.updateDebounceTimer);
 		}
-
-		const similarNotes = await this.getSimilarNotes(activeFile);
-		const view = this.app.workspace.getLeavesOfType(VIEW_TYPE_SIMILAR_NOTES)[0]?.view;
 		
-		if (view instanceof SimilarNotesView) {
-			view.updateSimilarNotes(similarNotes, activeFile);
-		}
+		// Set new timer
+		this.updateDebounceTimer = setTimeout(async () => {
+			const activeFile = this.app.workspace.getActiveFile();
+			if (!activeFile || activeFile.extension !== 'md') {
+				return;
+			}
+
+			const similarNotes = await this.getSimilarNotes(activeFile);
+			const view = this.app.workspace.getLeavesOfType(VIEW_TYPE_SIMILAR_NOTES)[0]?.view;
+			
+			if (view instanceof SimilarNotesView) {
+				view.updateSimilarNotes(similarNotes, activeFile);
+			}
+		}, this.UPDATE_DELAY);
 	}
 
 	async getSimilarNotes(file: TFile): Promise<Array<{ file: TFile; similarity: number; commonTags: number; commonLinks: number }>> {
-		const allFiles = this.app.vault.getMarkdownFiles();
+		const indexedNotes = this.indexingService.getAllIndexedNotes();
 		const results: Array<{ file: TFile; similarity: number; commonTags: number; commonLinks: number }> = [];
 
-		for (const compareFile of allFiles) {
-			if (compareFile.path === file.path) continue;
+		for (const noteIndex of indexedNotes) {
+			if (noteIndex.path === file.path) continue;
+			
+			const compareFile = this.app.vault.getAbstractFileByPath(noteIndex.path);
+			if (!compareFile || !(compareFile instanceof TFile)) continue;
 
 			const result = await this.similarityCalculator.calculateSimilarity(
 				file,
