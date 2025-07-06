@@ -12,6 +12,9 @@ export class SimilarNotesView extends ItemView {
 		commonLinks: number;
 	}> = [];
 	private currentFile: TFile | null = null;
+	private currentHoveredLink: HTMLElement | null = null;
+	private currentHoveredNote: TFile | null = null;
+	private keydownListener: ((event: KeyboardEvent) => void) | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: JaccardPlugin) {
 		super(leaf);
@@ -32,10 +35,12 @@ export class SimilarNotesView extends ItemView {
 
 	async onOpen() {
 		this.renderView();
+		this.setupGlobalKeyListener();
 	}
 
 	async onClose() {
 		// Clean up when view is closed
+		this.cleanupGlobalKeyListener();
 	}
 
 	updateSimilarNotes(
@@ -112,23 +117,21 @@ export class SimilarNotesView extends ItemView {
 				href: "#",
 			});
 
-		// Add hover preview functionality (only with Ctrl/Cmd modifier)
+		// Track hover state for modifier key preview
 		linkEl.addEventListener("mouseover", (event) => {
 			event.stopPropagation();
+			this.currentHoveredLink = linkEl;
+			this.currentHoveredNote = note.file;
 			
-			// Check for Ctrl (Windows) or Cmd (Mac) key
-			if (!event.ctrlKey && !event.metaKey) {
-				return; // Exit if modifier key not pressed
+			// If modifier key is already pressed, trigger preview immediately
+			if (event.ctrlKey || event.metaKey) {
+				this.triggerHoverPreview(event);
 			}
+		});
 
-			this.app.workspace.trigger("hover-link", {
-				event: event,
-				source: "jaccard-plugin",
-				hoverParent: this.app.workspace.getActiveViewOfType(MarkdownView) || this,
-				targetEl: linkEl,
-				linktext: note.file.path,
-				sourcePath: this.currentFile?.path || '',
-			});
+		linkEl.addEventListener("mouseout", () => {
+			this.currentHoveredLink = null;
+			this.currentHoveredNote = null;
 		});
 
 			// Add click handler to the entire note item for better UX
@@ -159,5 +162,34 @@ export class SimilarNotesView extends ItemView {
 				});
 			}
 		}
+	}
+
+	private setupGlobalKeyListener() {
+		this.keydownListener = (event: KeyboardEvent) => {
+			if ((event.ctrlKey || event.metaKey) && this.currentHoveredLink && this.currentHoveredNote) {
+				this.triggerHoverPreview(event);
+			}
+		};
+		document.addEventListener("keydown", this.keydownListener);
+	}
+
+	private cleanupGlobalKeyListener() {
+		if (this.keydownListener) {
+			document.removeEventListener("keydown", this.keydownListener);
+			this.keydownListener = null;
+		}
+	}
+
+	private triggerHoverPreview(event: Event) {
+		if (!this.currentHoveredLink || !this.currentHoveredNote) return;
+
+		this.app.workspace.trigger("hover-link", {
+			event: event,
+			source: "jaccard-plugin",
+			hoverParent: this.app.workspace.getActiveViewOfType(MarkdownView) || this,
+			targetEl: this.currentHoveredLink,
+			linktext: this.currentHoveredNote.path,
+			sourcePath: this.currentFile?.path || '',
+		});
 	}
 }
