@@ -112,18 +112,24 @@ export class SimilarNotesView extends ItemView {
 				href: "#",
 			});
 
-			// Add hover preview functionality
-			linkEl.addEventListener("mouseover", (event) => {
-				event.stopPropagation();
-				this.app.workspace.trigger("hover-link", {
-					event: event,
-					source: "jaccard-plugin",
-					hoverParent: this.app.workspace.getActiveViewOfType(MarkdownView) || this,
-					targetEl: linkEl,
-					linktext: note.file.path,
-					sourcePath: this.currentFile?.path || '',
-				});
+		// Add hover preview functionality (only with Ctrl/Cmd modifier)
+		linkEl.addEventListener("mouseover", (event) => {
+			event.stopPropagation();
+			
+			// Check for Ctrl (Windows) or Cmd (Mac) key
+			if (!event.ctrlKey && !event.metaKey) {
+				return; // Exit if modifier key not pressed
+			}
+
+			this.app.workspace.trigger("hover-link", {
+				event: event,
+				source: "jaccard-plugin",
+				hoverParent: this.app.workspace.getActiveViewOfType(MarkdownView) || this,
+				targetEl: linkEl,
+				linktext: note.file.path,
+				sourcePath: this.currentFile?.path || '',
 			});
+		});
 
 			// Add click handler to the entire note item for better UX
 			noteEl.addEventListener("click", async (event) => {
