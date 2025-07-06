@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, TFile } from "obsidian";
+import { ItemView, WorkspaceLeaf, TFile, MarkdownView } from "obsidian";
 import JaccardPlugin from "../main";
 
 export const VIEW_TYPE_SIMILAR_NOTES = "similar-notes-view";
@@ -118,7 +118,7 @@ export class SimilarNotesView extends ItemView {
 				this.app.workspace.trigger("hover-link", {
 					event: event,
 					source: "jaccard-plugin",
-					hoverParent: this.app.workspace.activeLeaf?.view || this,
+					hoverParent: this.app.workspace.getActiveViewOfType(MarkdownView) || this,
 					targetEl: linkEl,
 					linktext: note.file.path,
 					sourcePath: this.currentFile?.path || '',
