@@ -1,6 +1,6 @@
-import { Vault, TFile, MetadataCache, Notice, Plugin } from 'obsidian';
-import { hasKorean, extractKoreanKeywords } from './korean';
-import { extractEnglishKeywords } from './english';
+import { Vault, TFile, MetadataCache, Notice, Plugin } from "obsidian";
+import { hasKorean, extractKoreanKeywords } from "./korean";
+import { extractEnglishKeywords } from "./english";
 
 export interface NoteIndex {
 	path: string;
@@ -48,7 +48,7 @@ export class IndexingService {
 
 	async reindexAll(): Promise<void> {
 		if (this.isIndexing) {
-			console.log('Indexing already in progress');
+			console.log("Indexing already in progress");
 			return;
 		}
 
@@ -65,37 +65,45 @@ export class IndexingService {
 			for (let i = 0; i < files.length; i += BATCH_SIZE) {
 				// Check if we should stop
 				if (this.shouldStop) {
-					console.log('Indexing stopped by user');
+					console.log("Indexing stopped by user");
 					break;
 				}
 
 				const batch = files.slice(i, i + BATCH_SIZE);
-				
+
 				// Process batch in parallel
-				await Promise.all(batch.map(file => {
-					if (!this.shouldStop) {
-						return this.updateIndex(file);
-					}
-				}));
-				
+				await Promise.all(
+					batch.map((file) => {
+						if (!this.shouldStop) {
+							return this.updateIndex(file);
+						}
+					})
+				);
+
 				// Progress update
 				const progress = Math.min(i + BATCH_SIZE, files.length);
-				console.log(`Indexed ${progress}/${files.length} files (${Math.round(progress / files.length * 100)}%)`);
-				
+				console.log(
+					`Indexed ${progress}/${files.length} files (${Math.round(
+						(progress / files.length) * 100
+					)}%)`
+				);
+
 				// Call progress callback if set
 				if (this.onProgressCallback) {
 					this.onProgressCallback(progress, files.length);
 				}
-				
+
 				// Small delay to prevent UI freezing
 				if (i + BATCH_SIZE < files.length && !this.shouldStop) {
-					await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+					await new Promise((resolve) =>
+						setTimeout(resolve, DELAY_MS)
+					);
 				}
 			}
-			
+
 			if (!this.shouldStop) {
-				console.log('Indexing complete!');
-				new Notice('Indexing complete!');
+				console.log("Indexing complete!");
+				new Notice("Indexing complete!");
 				// Save index after full reindexing
 				await this.saveIndex();
 			}
@@ -138,15 +146,16 @@ export class IndexingService {
 			tags,
 			links,
 			keywords,
-			lastModified: file.stat.mtime
+			lastModified: file.stat.mtime,
 		});
-		
+
 		// Save index with debouncing
 		this.debouncedSave();
 	}
 
 	removeFromIndex(fileOrPath: TFile | string): void {
-		const path = typeof fileOrPath === 'string' ? fileOrPath : fileOrPath.path;
+		const path =
+			typeof fileOrPath === "string" ? fileOrPath : fileOrPath.path;
 		this.index.delete(path);
 		// Save index with debouncing
 		this.debouncedSave();
@@ -167,33 +176,42 @@ export class IndexingService {
 	private extractKeywords(content: string): string[] {
 		// Limit content length to prevent performance issues
 		const MAX_CONTENT_LENGTH = 5000;
-		const truncatedContent = content.length > MAX_CONTENT_LENGTH 
-			? content.substring(0, MAX_CONTENT_LENGTH) 
-			: content;
-		
+		const truncatedContent =
+			content.length > MAX_CONTENT_LENGTH
+				? content.substring(0, MAX_CONTENT_LENGTH)
+				: content;
+
 		const allKeywords = new Map<string, number>();
-		
+
 		// Extract Korean keywords if Korean text exists
 		if (hasKorean(truncatedContent)) {
 			try {
-				const koreanKeywords = extractKoreanKeywords(truncatedContent, 20);
-				koreanKeywords.forEach(keyword => {
-					allKeywords.set(keyword, (allKeywords.get(keyword) || 0) + 1);
+				const koreanKeywords = extractKoreanKeywords(
+					truncatedContent,
+					20
+				);
+				koreanKeywords.forEach((keyword) => {
+					allKeywords.set(
+						keyword,
+						(allKeywords.get(keyword) || 0) + 1
+					);
 				});
 			} catch (error) {
-				console.warn('Korean keyword extraction failed, using fallback');
+				console.warn(
+					"Korean keyword extraction failed, using fallback"
+				);
 			}
 		}
-		
+
 		// Extract English keywords
 		const englishKeywords = extractEnglishKeywords(truncatedContent, 20);
-		englishKeywords.forEach(keyword => {
+		englishKeywords.forEach((keyword) => {
 			// Skip if it's a Korean word (to avoid duplicates)
 			if (!hasKorean(keyword)) {
 				allKeywords.set(keyword, (allKeywords.get(keyword) || 0) + 1);
 			}
 		});
-		
+
 		// Sort by frequency and return top keywords
 		return Array.from(allKeywords.entries())
 			.sort((a, b) => b[1] - a[1])
@@ -207,7 +225,7 @@ export class IndexingService {
 			tags: Array.from(noteIndex.tags),
 			links: Array.from(noteIndex.links),
 			keywords: Array.from(noteIndex.keywords),
-			lastModified: noteIndex.lastModified
+			lastModified: noteIndex.lastModified,
 		};
 	}
 
@@ -217,7 +235,7 @@ export class IndexingService {
 			tags: new Set(serialized.tags),
 			links: new Set(serialized.links),
 			keywords: new Set(serialized.keywords),
-			lastModified: serialized.lastModified
+			lastModified: serialized.lastModified,
 		};
 	}
 
@@ -226,18 +244,23 @@ export class IndexingService {
 			const serialized: SerializedIndex = {
 				version: this.INDEX_VERSION,
 				lastUpdated: Date.now(),
-				entries: Array.from(this.index.values()).map(noteIndex => 
+				entries: Array.from(this.index.values()).map((noteIndex) =>
 					this.noteIndexToSerialized(noteIndex)
-				)
+				),
 			};
-			
+
 			// Save to a separate file for index data
 			const indexPath = `${this.plugin.manifest.dir}/index.json`;
-			await this.vault.adapter.write(indexPath, JSON.stringify(serialized, null, 2));
-			console.log(`Index saved with ${serialized.entries.length} entries`);
+			await this.vault.adapter.write(
+				indexPath,
+				JSON.stringify(serialized, null, 2)
+			);
+			console.log(
+				`Index saved with ${serialized.entries.length} entries`
+			);
 		} catch (error) {
-			console.error('Failed to save index:', error);
-			new Notice('Failed to save index');
+			console.error("Failed to save index:", error);
+			new Notice("Failed to save index");
 		}
 	}
 
@@ -245,7 +268,7 @@ export class IndexingService {
 		if (this.saveDebounceTimer) {
 			clearTimeout(this.saveDebounceTimer);
 		}
-		
+
 		this.saveDebounceTimer = setTimeout(() => {
 			this.saveIndex();
 		}, this.SAVE_DELAY);
@@ -255,50 +278,52 @@ export class IndexingService {
 		try {
 			// Load from a separate file for index data
 			const indexPath = `${this.plugin.manifest.dir}/index.json`;
-			
-			if (!await this.vault.adapter.exists(indexPath)) {
-				console.log('No index file found');
+
+			if (!(await this.vault.adapter.exists(indexPath))) {
+				console.log("No index file found");
 				return false;
 			}
-			
+
 			const data = await this.vault.adapter.read(indexPath);
 			const saved = JSON.parse(data) as SerializedIndex;
-			
+
 			if (!saved || saved.version !== this.INDEX_VERSION) {
-				console.log('No valid index found or version mismatch');
+				console.log("No valid index found or version mismatch");
 				return false;
 			}
-			
+
 			this.index.clear();
 			for (const entry of saved.entries) {
 				this.index.set(entry.path, this.serializedToNoteIndex(entry));
 			}
-			
+
 			console.log(`Index loaded with ${saved.entries.length} entries`);
 			return true;
 		} catch (error) {
-			console.error('Failed to load index:', error);
+			console.error("Failed to load index:", error);
 			return false;
 		}
 	}
 
 	async initializeIndex(): Promise<void> {
-		const indexLoaded = await this.loadIndex();
-		
-		if (indexLoaded) {
-			// Perform incremental update for changed files
-			await this.updateChangedFiles();
-		} else {
-			// Full reindex if no valid index exists
-			await this.reindexAll();
-		}
+		setTimeout(async () => {
+			const indexLoaded = await this.loadIndex();
+
+			if (indexLoaded) {
+				// Perform incremental update for changed files
+				await this.updateChangedFiles();
+			} else {
+				// Full reindex if no valid index exists
+				await this.reindexAll();
+			}
+		}, 100);
 	}
 
 	private async updateChangedFiles(): Promise<void> {
 		const files = this.vault.getMarkdownFiles();
 		const filesToUpdate: TFile[] = [];
 		const filesToRemove: string[] = [];
-		
+
 		// Check for modified or new files
 		for (const file of files) {
 			const indexEntry = this.index.get(file.path);
@@ -306,39 +331,44 @@ export class IndexingService {
 				filesToUpdate.push(file);
 			}
 		}
-		
+
 		// Check for deleted files
-		const currentFilePaths = new Set(files.map(f => f.path));
+		const currentFilePaths = new Set(files.map((f) => f.path));
 		for (const path of this.index.keys()) {
 			if (!currentFilePaths.has(path)) {
 				filesToRemove.push(path);
 			}
 		}
-		
+
 		// Remove deleted files
 		for (const path of filesToRemove) {
 			this.index.delete(path);
 		}
-		
+
 		// Update changed files
 		if (filesToUpdate.length > 0) {
 			console.log(`Updating ${filesToUpdate.length} changed files...`);
 			const BATCH_SIZE = 50;
-			
+
 			for (let i = 0; i < filesToUpdate.length; i += BATCH_SIZE) {
 				const batch = filesToUpdate.slice(i, i + BATCH_SIZE);
-				await Promise.all(batch.map(file => this.updateIndex(file)));
-				
+				await Promise.all(batch.map((file) => this.updateIndex(file)));
+
 				if (this.onProgressCallback) {
-					this.onProgressCallback(i + batch.length, filesToUpdate.length);
+					this.onProgressCallback(
+						i + batch.length,
+						filesToUpdate.length
+					);
 				}
 			}
-			
+
 			// Save after updating
 			await this.saveIndex();
 		}
-		
-		console.log(`Index updated: ${filesToUpdate.length} files changed, ${filesToRemove.length} files removed`);
+
+		console.log(
+			`Index updated: ${filesToUpdate.length} files changed, ${filesToRemove.length} files removed`
+		);
 		if (this.onProgressCallback) {
 			this.onProgressCallback(0, 0);
 		}
@@ -355,4 +385,3 @@ export class IndexingService {
 		}
 	}
 }
- 

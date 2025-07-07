@@ -69,7 +69,6 @@ export default class JaccardPlugin extends Plugin {
 
 		this.app.workspace.onLayoutReady(async () => {
 			await this.indexingService.initializeIndex();
-			this.activateView();
 		});
 
 		this.registerEvent(
