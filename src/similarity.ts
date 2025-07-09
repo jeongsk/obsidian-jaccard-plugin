@@ -25,9 +25,13 @@ export class SimilarityCalculator {
 			return { file: fileB, similarity: 0, commonTags: 0, commonLinks: 0 };
 		}
 
+		// Extract keywords on-demand if not already extracted
+		const keywordsA = await indexingService.extractKeywordsForFile(fileA);
+		const keywordsB = await indexingService.extractKeywordsForFile(fileB);
+
 		const tagScore = this.settings.tagWeight * this.calculateJaccardIndex(indexA.tags, indexB.tags);
 		const linkScore = this.settings.linkWeight * this.calculateJaccardIndex(indexA.links, indexB.links);
-		const keywordScore = this.settings.keywordWeight * this.calculateJaccardIndex(indexA.keywords, indexB.keywords);
+		const keywordScore = this.settings.keywordWeight * this.calculateJaccardIndex(keywordsA, keywordsB);
 
 		const totalWeight = this.settings.tagWeight + this.settings.linkWeight + this.settings.keywordWeight;
 		const similarity = (tagScore + linkScore + keywordScore) / totalWeight;

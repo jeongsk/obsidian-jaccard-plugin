@@ -35,6 +35,8 @@ export class IndexingService {
 	private saveDebounceTimer?: NodeJS.Timeout;
 	private readonly INDEX_VERSION = 1;
 	private readonly SAVE_DELAY = 2000; // 2 seconds debounce
+	private indexingQueue: TFile[] = [];
+	private isProcessingQueue = false;
 
 	constructor(vault: Vault, metadataCache: MetadataCache, plugin: Plugin) {
 		this.vault = vault;
@@ -56,8 +58,8 @@ export class IndexingService {
 		this.shouldStop = false;
 		this.index.clear();
 		const files = this.vault.getMarkdownFiles();
-		const BATCH_SIZE = 50;
-		const DELAY_MS = 10;
+		const BATCH_SIZE = 10; // Reduced batch size for better responsiveness
+		const DELAY_MS = 50; // Increased delay for better UI responsiveness
 
 		console.log(`Starting indexing of ${files.length} files...`);
 
@@ -117,7 +119,6 @@ export class IndexingService {
 	}
 
 	async updateIndex(file: TFile): Promise<void> {
-		const content = await this.vault.cachedRead(file);
 		const metadata = this.metadataCache.getFileCache(file);
 
 		const tags = new Set<string>();
@@ -136,21 +137,84 @@ export class IndexingService {
 			}
 		}
 
-		const extractedKeywords = this.extractKeywords(content);
-		for (const keyword of extractedKeywords) {
-			keywords.add(keyword);
-		}
-
+		// Defer keyword extraction for better performance
+		// Only extract keywords when actually needed (when calculating similarity)
 		this.index.set(file.path, {
 			path: file.path,
 			tags,
 			links,
-			keywords,
+			keywords, // Empty for now
 			lastModified: file.stat.mtime,
 		});
 
+		// Add to queue for background keyword extraction
+		this.addToKeywordExtractionQueue(file);
+
 		// Save index with debouncing
 		this.debouncedSave();
+	}
+
+	private addToKeywordExtractionQueue(file: TFile): void {
+		this.indexingQueue.push(file);
+		if (!this.isProcessingQueue) {
+			this.processKeywordExtractionQueue();
+		}
+	}
+
+	private async processKeywordExtractionQueue(): Promise<void> {
+		if (this.isProcessingQueue) return;
+		this.isProcessingQueue = true;
+
+		while (this.indexingQueue.length > 0) {
+			const file = this.indexingQueue.shift();
+			if (!file) continue;
+
+			const indexEntry = this.index.get(file.path);
+			if (!indexEntry || indexEntry.keywords.size > 0) continue;
+
+			try {
+				const content = await this.vault.cachedRead(file);
+				const extractedKeywords = this.extractKeywords(content);
+				
+				indexEntry.keywords.clear();
+				for (const keyword of extractedKeywords) {
+					indexEntry.keywords.add(keyword);
+				}
+			} catch (error) {
+				console.error(`Failed to extract keywords for ${file.path}:`, error);
+			}
+
+			// Small delay between extractions
+			await new Promise(resolve => setTimeout(resolve, 10));
+		}
+
+		this.isProcessingQueue = false;
+		// Save after processing queue
+		this.debouncedSave();
+	}
+
+	async extractKeywordsForFile(file: TFile): Promise<Set<string>> {
+		const indexEntry = this.index.get(file.path);
+		
+		if (indexEntry && indexEntry.keywords.size > 0) {
+			return indexEntry.keywords;
+		}
+
+		// Extract keywords on-demand if not already extracted
+		try {
+			const content = await this.vault.cachedRead(file);
+			const extractedKeywords = this.extractKeywords(content);
+			const keywordsSet = new Set(extractedKeywords);
+
+			if (indexEntry) {
+				indexEntry.keywords = keywordsSet;
+			}
+
+			return keywordsSet;
+		} catch (error) {
+			console.error(`Failed to extract keywords for ${file.path}:`, error);
+			return new Set();
+		}
 	}
 
 	removeFromIndex(fileOrPath: TFile | string): void {
@@ -175,7 +239,7 @@ export class IndexingService {
 
 	private extractKeywords(content: string): string[] {
 		// Limit content length to prevent performance issues
-		const MAX_CONTENT_LENGTH = 5000;
+		const MAX_CONTENT_LENGTH = 3000; // Reduced from 5000
 		const truncatedContent =
 			content.length > MAX_CONTENT_LENGTH
 				? content.substring(0, MAX_CONTENT_LENGTH)
@@ -188,7 +252,7 @@ export class IndexingService {
 			try {
 				const koreanKeywords = extractKoreanKeywords(
 					truncatedContent,
-					20
+					15 // Reduced from 20
 				);
 				koreanKeywords.forEach((keyword) => {
 					allKeywords.set(
@@ -204,7 +268,7 @@ export class IndexingService {
 		}
 
 		// Extract English keywords
-		const englishKeywords = extractEnglishKeywords(truncatedContent, 20);
+		const englishKeywords = extractEnglishKeywords(truncatedContent, 15); // Reduced from 20
 		englishKeywords.forEach((keyword) => {
 			// Skip if it's a Korean word (to avoid duplicates)
 			if (!hasKorean(keyword)) {
@@ -215,7 +279,7 @@ export class IndexingService {
 		// Sort by frequency and return top keywords
 		return Array.from(allKeywords.entries())
 			.sort((a, b) => b[1] - a[1])
-			.slice(0, 20)
+			.slice(0, 15) // Reduced from 20
 			.map(([word]) => word);
 	}
 
@@ -306,25 +370,26 @@ export class IndexingService {
 	}
 
 	async initializeIndex(): Promise<void> {
+		// Delay initialization to not block UI
 		setTimeout(async () => {
 			const indexLoaded = await this.loadIndex();
 
 			if (indexLoaded) {
-				// Perform incremental update for changed files
-				await this.updateChangedFiles();
+				// Only update metadata (tags/links) initially, defer keyword extraction
+				await this.quickMetadataUpdate();
 			} else {
-				// Full reindex if no valid index exists
-				await this.reindexAll();
+				// Show notice and let user manually trigger full reindex
+				new Notice("No index found. Use 'Reindex all notes' command to build index.");
 			}
-		}, 100);
+		}, 1000); // Increased delay from 100ms to 1s
 	}
 
-	private async updateChangedFiles(): Promise<void> {
+	private async quickMetadataUpdate(): Promise<void> {
 		const files = this.vault.getMarkdownFiles();
 		const filesToUpdate: TFile[] = [];
 		const filesToRemove: string[] = [];
 
-		// Check for modified or new files
+		// Check for modified or new files (metadata only)
 		for (const file of files) {
 			const indexEntry = this.index.get(file.path);
 			if (!indexEntry || file.stat.mtime > indexEntry.lastModified) {
@@ -345,33 +410,50 @@ export class IndexingService {
 			this.index.delete(path);
 		}
 
-		// Update changed files
+		// Quick update for changed files (tags/links only)
 		if (filesToUpdate.length > 0) {
-			console.log(`Updating ${filesToUpdate.length} changed files...`);
-			const BATCH_SIZE = 50;
+			console.log(`Quick updating ${filesToUpdate.length} changed files...`);
+			
+			for (const file of filesToUpdate) {
+				const metadata = this.metadataCache.getFileCache(file);
+				const indexEntry = this.index.get(file.path) || {
+					path: file.path,
+					tags: new Set<string>(),
+					links: new Set<string>(),
+					keywords: new Set<string>(),
+					lastModified: file.stat.mtime,
+				};
 
-			for (let i = 0; i < filesToUpdate.length; i += BATCH_SIZE) {
-				const batch = filesToUpdate.slice(i, i + BATCH_SIZE);
-				await Promise.all(batch.map((file) => this.updateIndex(file)));
+				// Update only tags and links
+				indexEntry.tags.clear();
+				indexEntry.links.clear();
 
-				if (this.onProgressCallback) {
-					this.onProgressCallback(
-						i + batch.length,
-						filesToUpdate.length
-					);
+				if (metadata?.tags) {
+					for (const tag of metadata.tags) {
+						indexEntry.tags.add(tag.tag);
+					}
 				}
+
+				if (metadata?.links) {
+					for (const link of metadata.links) {
+						indexEntry.links.add(link.link);
+					}
+				}
+
+				indexEntry.lastModified = file.stat.mtime;
+				this.index.set(file.path, indexEntry);
+
+				// Add to keyword extraction queue for background processing
+				this.addToKeywordExtractionQueue(file);
 			}
 
-			// Save after updating
-			await this.saveIndex();
+			// Start background keyword extraction
+			this.processKeywordExtractionQueue();
 		}
 
 		console.log(
-			`Index updated: ${filesToUpdate.length} files changed, ${filesToRemove.length} files removed`
+			`Quick update complete: ${filesToUpdate.length} files updated, ${filesToRemove.length} files removed`
 		);
-		if (this.onProgressCallback) {
-			this.onProgressCallback(0, 0);
-		}
 	}
 
 	getAllIndexedNotes(): NoteIndex[] {
@@ -383,5 +465,8 @@ export class IndexingService {
 		if (this.saveDebounceTimer) {
 			clearTimeout(this.saveDebounceTimer);
 		}
+		// Clear indexing queue
+		this.indexingQueue = [];
+		this.isProcessingQueue = false;
 	}
 }
